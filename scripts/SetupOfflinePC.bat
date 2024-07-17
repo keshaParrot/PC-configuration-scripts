@@ -1,20 +1,36 @@
-@echo off
-
-REM Checking if the password parameter is provided
-if "%1"=="" (
-    REM If password is not provided, create UserAdmin account without a password
-    net user UserAdmin /add /passwordreq:no
-    echo Created UserAdmin without a password.
-) else (
-    REM If password is provided, set the password for UserAdmin account
-    set PASSWORD=%1
-    net user UserAdmin /add
-    net user UserAdmin %PASSWORD%
-    echo Password for UserAdmin was set successfully.
+# Check if the password parameter is provided
+param (
+    [string]$password
 )
 
-REM Adding UserAdmin to Administrators group
-net localgroup Administrators UserAdmin /add
+# Check if the UserAdmin account exists
+$userExists = Get-LocalUser -Name "UserAdmin" -ErrorAction SilentlyContinue
 
-REM Restarting the system
-shutdown.exe -r -t 0
+if ($null -ne $userExists) {
+    # If the account exists, set the password
+    if ($password) {
+        $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+        Set-LocalUser -Name "UserAdmin" -Password $securePassword
+        Write-Output "Password for UserAdmin was set successfully."
+    } else {
+        Write-Output "UserAdmin account already exists and no password was provided."
+    }
+} else {
+    # If the account does not exist, create it
+    if ($password) {
+        $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+        New-LocalUser -Name "UserAdmin" -Password $securePassword -PasswordNeverExpires:$true
+        Write-Output "Created UserAdmin with a password."
+    } else {
+        New-LocalUser -Name "UserAdmin" -NoPassword -PasswordNeverExpires:$true
+        Write-Output "Created UserAdmin without a password."
+    }
+}
+
+# Add UserAdmin to Administrators group
+Add-LocalGroupMember -Group "Administrators" -Member "UserAdmin"
+
+# Start msoobe.exe and restart the system using shutdown.exe -r
+Start-Process "msoobe.exe"
+Start-Sleep -Seconds 10  # Wait for msoobe.exe to start properly
+Start-Process "shutdown.exe" -ArgumentList "/r /t 0"
